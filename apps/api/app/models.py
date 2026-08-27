@@ -56,6 +56,10 @@ class Obligation(BaseModel):
     def irregular_total(self) -> int:
         return sum(b.total for b in self.b_blocks)
 
+    @property
+    def is_one_off(self) -> bool:
+        return self.payment_count == 1
+
 
 class ValidationIssue(BaseModel):
     code: str
@@ -67,7 +71,7 @@ class ValidationIssue(BaseModel):
 class ParseResult(BaseModel):
     valid: bool
     obligation: Obligation | None = None
-    issues: list[ValidationIssue] = []
+    issues: list[ValidationIssue] = Field(default_factory=list)
 
 
 class EngineConfig(BaseModel):
@@ -114,8 +118,8 @@ class OptimizationMetrics(BaseModel):
 class OptimizationResult(BaseModel):
     valid: bool
     solver: str
-    issues: list[ValidationIssue] = []
-    plans: list[ObligationPlan] = []
+    issues: list[ValidationIssue] = Field(default_factory=list)
+    plans: list[ObligationPlan] = Field(default_factory=list)
     metrics: OptimizationMetrics | None = None
 
 
@@ -124,7 +128,7 @@ class CodesRequest(BaseModel):
 
 
 class OptimizeRequest(CodesRequest):
-    config: EngineConfig = EngineConfig()
+    config: EngineConfig = Field(default_factory=EngineConfig)
 
 
 class ParseRequest(BaseModel):
@@ -134,4 +138,4 @@ class ParseRequest(BaseModel):
 class SimulateRequest(BaseModel):
     codes: list[str]
     candidate_code: str
-    config: EngineConfig = EngineConfig()
+    config: EngineConfig = Field(default_factory=EngineConfig)
