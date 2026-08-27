@@ -45,9 +45,32 @@ This file is the chronological build journal for Debt Optimiser. It is intention
 ## 2026-08-28, Phase 6, Git workflow
 - Development isolated on `feat/core-engine-v1`.
 - Opened PR #1 into `main` with architecture and invariant summary.
+- PR #1 was merged into `main`.
 
-## Provider-side follow-up
-- create/link Supabase project and apply migrations;
-- deploy an API runtime with OR-Tools;
-- deploy Next.js frontend and set API URL;
-- configure authentication/RLS before hosted personal financial data.
+## 2026-08-28, Phase 7, hosted database hardening
+- Created Supabase project `debt-optimiser` in `eu-central-2` under the approved organization.
+- Applied the base schema migration.
+- Added and applied authenticated ownership migration: `user_id` is required, references `auth.users`, and all four public tables have RLS ownership policies.
+- Added `updated_at` trigger for obligations.
+- Ran Supabase security advisor after migration: **zero security lints**.
+- Added covering indexes for foreign-key joins used by ledger and allocation persistence.
+- Generated and integrated Supabase-compatible TypeScript database types.
+
+## 2026-08-28, Phase 8, authenticated cockpit persistence
+- Added browser Supabase client with publishable-key support.
+- Added email/password authentication UI.
+- Added private-workspace bootstrap flow: anonymous users see the canonical local seed; authenticated accounts load their own obligation rows; an empty account can explicitly persist the canonical seed.
+- Added typed persistence helpers for obligations and ledger events.
+- Sandbox-applied codes persist automatically after parser validation when authenticated.
+- Removing a code deactivates its persisted obligation rather than destroying audit history.
+- Upgraded Actuals from local preview to an authenticated generation/payment ledger with dated `INCOME`, `PAYMENT`, `ADJUSTMENT`, and `REVERSAL` events.
+- Added cloud/local mode indicators and responsive cockpit styles.
+- CI caught an initial Supabase generic typing error in the web build; database types were replaced with Supabase-compatible generated structure before continuing.
+
+## Remaining production work
+- wait for green CI on the authenticated persistence build;
+- deploy an API runtime containing OR-Tools CP-SAT;
+- deploy the Next.js frontend and set API/Supabase environment variables;
+- verify Supabase Auth redirect/site configuration against the deployed frontend;
+- run end-to-end smoke tests for sign-in, seed persistence, add/remove code, optimizer, sandbox and ledger events;
+- move the GitHub repository to private before treating the hosted instance as the canonical location for personal financial source data.
