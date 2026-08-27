@@ -21,18 +21,30 @@ This file is the chronological build journal for Debt Optimiser. It is intention
 - Added no-gap semantics for accelerated obligations.
 - Added fixed schedule handling.
 - Added September front-loading for irregular B atoms and one-offs when eligible.
-- Added lexicographic optimization and a deterministic development fallback.
+- Added non-increasing monthly load constraint by default: Sep >= Oct >= Nov >= Dec >= Jan.
+- Added lexicographic optimization and a deterministic development fallback with whole-unit repair.
 
 ## 2026-08-28, Phase 3, API and tests
 - Added FastAPI endpoints for health, seed, parse, validate, optimize and simulate.
 - Added parser/validation/optimizer invariant tests.
 - Added CHF 14,635 checksum test.
+- Added dynamic C14 integration test proving a new valid code can be parsed and reoptimized without schema/formula changes.
+- Caught and corrected an invalid compact period in the sandbox example during test expansion.
+- Local verification after correction: **12 tests passing**.
+- Local fallback seed profile after whole-unit repair: Sep 3003, Oct 2946, Nov 2928, Dec 2879, Jan 2879. This is a valid descending integer-unit plan, not a claim of CP-SAT global optimum.
 
 ## 2026-08-28, Phase 4, web cockpit
 - Added Next.js dashboard shell, engine status, KPI cards, monthly matrix, load profile, code DB and sandbox.
+- Added local Actuals/event preview.
+- Ran TypeScript transpilation syntax checks over application source files in the development environment.
 
 ## 2026-08-28, Phase 5, persistence/deployment scaffolding
 - Added PostgreSQL/Supabase schema, Docker scaffolding, environment template and CI.
+- Base Supabase migration enables RLS and deliberately provides no permissive data policies.
+
+## 2026-08-28, Phase 6, Git workflow
+- Development isolated on `feat/core-engine-v1`.
+- Opened PR #1 into `main` with architecture and invariant summary.
 
 ## Provider-side follow-up
 - create/link Supabase project and apply migrations;
