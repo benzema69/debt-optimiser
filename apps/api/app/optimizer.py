@@ -105,9 +105,11 @@ def _optimize_cp_sat(obligations: list[Obligation], config: EngineConfig, cp_mod
             a, u, irr, _ = _fixed_schedule(o, config, months)
             fixed_by_ob[o.id], fixed_units[o.id], fixed_irregular[o.id] = a, u, irr
             continue
+
         earliest = max(month_start(config.optimization_start), o.start_month)
         latest = min(month_start(config.zero_day), o.native_end_month)
         eligible = [m for m in months if earliest <= m <= latest]
+
         if o.b_blocks:
             if config.frontload_b:
                 forced_irregular[o.id][month_key(eligible[0])] += o.irregular_total
@@ -118,6 +120,7 @@ def _optimize_cp_sat(obligations: list[Obligation], config: EngineConfig, cp_mod
                         target = eligible[min(cursor, len(eligible) - 1)]
                         forced_irregular[o.id][month_key(target)] += block.amount
                         cursor += 1
+
         total_units = o.regular_units
         if total_units:
             yvars = []
@@ -131,8 +134,12 @@ def _optimize_cp_sat(obligations: list[Obligation], config: EngineConfig, cp_mod
                 yvars.append(y)
                 if idx:
                     model.Add(yvars[idx - 1] >= y)
+
             model.Add(yvars[0] == 1)
             model.Add(sum(xvars[(o.id, month_key(m))] for m in eligible) == total_units)
+
+            if config.frontload_one_off and o.is_one_off:
+                model.Add(xvars[(o.id, month_key(eligible[0]))] == total_units)
 
     month_total_vars = {}
     for m in months:
@@ -167,28 +174,37 @@ def _optimize_cp_sat(obligations: list[Obligation], config: EngineConfig, cp_mod
 
     try:
         model.Minimize(peak)
-        s1 = solver_for_current_model(); status = s1.Solve(model)
+        s1 = solver_for_current_model()
+        status = s1.Solve(model)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             raise RuntimeError(f"peak phase failed: {status}")
         model.Add(peak == s1.Value(peak))
 
         model.Maximize(minimum)
-        s2 = solver_for_current_model(); status = s2.Solve(model)
+        s2 = solver_for_current_model()
+        status = s2.Solve(model)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             raise RuntimeError(f"leveling phase failed: {status}")
         model.Add(minimum == s2.Value(minimum))
 
         weights = {k: len(keys) - i for i, k in enumerate(keys)}
-        front_expr = sum(xvars[(o.id, k)] * o.unit * weights[k] for o in obligations for k in keys if (o.id, k) in xvars)
+        front_expr = sum(
+            xvars[(o.id, k)] * o.unit * weights[k]
+            for o in obligations
+            for k in keys
+            if (o.id, k) in xvars
+        )
         if xvars:
             model.Maximize(front_expr)
-            s3 = solver_for_current_model(); status = s3.Solve(model)
+            s3 = solver_for_current_model()
+            status = s3.Solve(model)
             if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 raise RuntimeError(f"frontload phase failed: {status}")
             model.Add(front_expr == s3.Value(front_expr))
 
         model.Minimize(month_total_vars[keys[-1]])
-        solver = solver_for_current_model(); status = solver.Solve(model)
+        solver = solver_for_current_model()
+        status = solver.Solve(model)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             raise RuntimeError(f"final-month phase failed: {status}")
     except RuntimeError as exc:
@@ -212,12 +228,35 @@ def _optimize_cp_sat(obligations: list[Obligation], config: EngineConfig, cp_mod
                     units = solver.Value(xvars[(o.id, key)])
                     amount += units * o.unit
             if amount:
-                allocs.append(MonthlyAllocation(id=o.id, entity=o.entity, month=key, amount=amount, regular_units=units, irregular_amount=irregular, fixed_amount=fixed))
+                allocs.append(
+                    MonthlyAllocation(
+                        id=o.id,
+                        entity=o.entity,
+                        month=key,
+                        amount=amount,
+                        regular_units=units,
+                        irregular_amount=irregular,
+                        fixed_amount=fixed,
+                    )
+                )
                 monthly_totals[key] += amount
-        plan = ObligationPlan(id=o.id, entity=o.entity, mt=o.mt, unit=o.unit, policy=o.policy, allocations=allocs)
+
+        plan = ObligationPlan(
+            id=o.id,
+            entity=o.entity,
+            mt=o.mt,
+            unit=o.unit,
+            policy=o.policy,
+            allocations=allocs,
+        )
         if plan.planned_total != o.mt:
-            return OptimizationResult(valid=False, solver="cp-sat", issues=[_issue(o.raw_code, "PLAN_CHECKSUM", f"planned {plan.planned_total}, expected {o.mt}")])
+            return OptimizationResult(
+                valid=False,
+                solver="cp-sat",
+                issues=[_issue(o.raw_code, "PLAN_CHECKSUM", f"planned {plan.planned_total}, expected {o.mt}")],
+            )
         plans.append(plan)
+
     return _finish("cp-sat", plans, obligations, config, monthly_totals)
 
 
@@ -238,23 +277,48 @@ def _optimize_fallback(obligations: list[Obligation], config: EngineConfig) -> O
             if fixed_issues:
                 return OptimizationResult(valid=False, solver="fallback-greedy", issues=fixed_issues)
             for k, v in amounts.items():
-                per_ob_amount[o.id][k] += v; monthly_totals[k] += v; per_ob_fixed[o.id][k] += v
-            for k, v in units.items(): per_ob_units[o.id][k] += v
-            for k, v in irregular.items(): per_ob_irregular[o.id][k] += v
+                per_ob_amount[o.id][k] += v
+                monthly_totals[k] += v
+                per_ob_fixed[o.id][k] += v
+            for k, v in units.items():
+                per_ob_units[o.id][k] += v
+            for k, v in irregular.items():
+                per_ob_irregular[o.id][k] += v
             continue
+
         earliest = max(month_start(config.optimization_start), o.start_month)
         latest = min(month_start(config.zero_day), o.native_end_month)
         eligible = [month_key(m) for m in months if earliest <= m <= latest]
+
         if o.b_blocks:
-            target = eligible[0]
-            per_ob_amount[o.id][target] += o.irregular_total
-            per_ob_irregular[o.id][target] += o.irregular_total
-            monthly_totals[target] += o.irregular_total
+            if config.frontload_b:
+                target = eligible[0]
+                per_ob_amount[o.id][target] += o.irregular_total
+                per_ob_irregular[o.id][target] += o.irregular_total
+                monthly_totals[target] += o.irregular_total
+            else:
+                cursor = 0
+                for block in o.b_blocks:
+                    for _ in range(block.count):
+                        target = eligible[min(cursor, len(eligible) - 1)]
+                        per_ob_amount[o.id][target] += block.amount
+                        per_ob_irregular[o.id][target] += block.amount
+                        monthly_totals[target] += block.amount
+                        cursor += 1
+
         if o.regular_units:
             acc.append((o, eligible, o.regular_units))
 
     extras: list[tuple[Obligation, list[str]]] = []
     for o, eligible, total_units in acc:
+        if config.frontload_one_off and o.is_one_off:
+            first = eligible[0]
+            active_by_ob[o.id] = [first]
+            per_ob_units[o.id][first] += total_units
+            per_ob_amount[o.id][first] += total_units * o.unit
+            monthly_totals[first] += total_units * o.unit
+            continue
+
         active_count = min(total_units, len(eligible))
         active = eligible[:active_count]
         active_by_ob[o.id] = active
@@ -274,7 +338,10 @@ def _optimize_fallback(obligations: list[Obligation], config: EngineConfig) -> O
     if config.descending_load:
         by_id = {o.id: o for o in obligations}
         for _ in range(1000):
-            violation = next((i for i in range(len(keys) - 1) if monthly_totals[keys[i]] < monthly_totals[keys[i + 1]]), None)
+            violation = next(
+                (i for i in range(len(keys) - 1) if monthly_totals[keys[i]] < monthly_totals[keys[i + 1]]),
+                None,
+            )
             if violation is None:
                 break
             left, right = keys[violation], keys[violation + 1]
@@ -298,23 +365,88 @@ def _optimize_fallback(obligations: list[Obligation], config: EngineConfig) -> O
 
     plans: list[ObligationPlan] = []
     for o in sorted(obligations, key=lambda z: z.rank):
-        allocs = []
+        allocs: list[MonthlyAllocation] = []
         for k in keys:
             amount = per_ob_amount[o.id][k]
             if amount:
-                allocs.append(MonthlyAllocation(id=o.id, entity=o.entity, month=k, amount=amount, regular_units=per_ob_units[o.id][k], irregular_amount=per_ob_irregular[o.id][k], fixed_amount=per_ob_fixed[o.id][k]))
-        plan = ObligationPlan(id=o.id, entity=o.entity, mt=o.mt, unit=o.unit, policy=o.policy, allocations=allocs)
+                allocs.append(
+                    MonthlyAllocation(
+                        id=o.id,
+                        entity=o.entity,
+                        month=k,
+                        amount=amount,
+                        regular_units=per_ob_units[o.id][k],
+                        irregular_amount=per_ob_irregular[o.id][k],
+                        fixed_amount=per_ob_fixed[o.id][k],
+                    )
+                )
+        plan = ObligationPlan(
+            id=o.id,
+            entity=o.entity,
+            mt=o.mt,
+            unit=o.unit,
+            policy=o.policy,
+            allocations=allocs,
+        )
         if plan.planned_total != o.mt:
-            return OptimizationResult(valid=False, solver="fallback-greedy", issues=[_issue(o.raw_code, "PLAN_CHECKSUM", f"planned {plan.planned_total}, expected {o.mt}")])
+            return OptimizationResult(
+                valid=False,
+                solver="fallback-greedy",
+                issues=[_issue(o.raw_code, "PLAN_CHECKSUM", f"planned {plan.planned_total}, expected {o.mt}")],
+            )
         plans.append(plan)
+
     return _finish("fallback-greedy", plans, obligations, config, monthly_totals)
 
 
-def _finish(solver: str, plans: list[ObligationPlan], obligations: list[Obligation], config: EngineConfig, monthly_totals: dict[str, int]) -> OptimizationResult:
+def _finish(
+    solver: str,
+    plans: list[ObligationPlan],
+    obligations: list[Obligation],
+    config: EngineConfig,
+    monthly_totals: dict[str, int],
+) -> OptimizationResult:
     global_mt = sum(o.mt for o in obligations)
     if sum(monthly_totals.values()) != global_mt:
-        return OptimizationResult(valid=False, solver=solver, issues=[_issue("ENGINE", "GLOBAL_CHECKSUM", f"plan sums to {sum(monthly_totals.values())}, expected {global_mt}")])
+        return OptimizationResult(
+            valid=False,
+            solver=solver,
+            issues=[_issue("ENGINE", "GLOBAL_CHECKSUM", f"plan sums to {sum(monthly_totals.values())}, expected {global_mt}")],
+        )
+
     values = list(monthly_totals.values())
+    if config.descending_load and any(a < b for a, b in zip(values, values[1:])):
+        return OptimizationResult(
+            valid=False,
+            solver=solver,
+            issues=[_issue("ENGINE", "DESCENDING_LOAD", f"monthly load is not non-increasing: {values}")],
+        )
+
+    by_id = {o.id: o for o in obligations}
+    all_months = [month_key(m) for m in months_between(config.optimization_start, config.zero_day)]
+    for plan in plans:
+        o = by_id[plan.id]
+        if o.policy != Policy.ACC:
+            continue
+        regular_by_month = {a.month: a.regular_units for a in plan.allocations}
+        positives = [i for i, key in enumerate(all_months) if regular_by_month.get(key, 0) > 0]
+        if positives:
+            first, last = min(positives), max(positives)
+            if any(regular_by_month.get(all_months[i], 0) == 0 for i in range(first, last + 1)):
+                return OptimizationResult(
+                    valid=False,
+                    solver=solver,
+                    issues=[_issue(o.raw_code, "REGULAR_GAP", "accelerated regular schedule contains a gap before completion")],
+                )
+
     days = days_inclusive(config.optimization_start, config.zero_day)
-    metrics = OptimizationMetrics(global_mt=global_mt, peak_monthly=max(values), minimum_monthly=min(values), final_month=values[-1], average_per_day=round(global_mt / days, 2), days_in_window=days, monthly_totals=monthly_totals)
+    metrics = OptimizationMetrics(
+        global_mt=global_mt,
+        peak_monthly=max(values),
+        minimum_monthly=min(values),
+        final_month=values[-1],
+        average_per_day=round(global_mt / days, 2),
+        days_in_window=days,
+        monthly_totals=monthly_totals,
+    )
     return OptimizationResult(valid=True, solver=solver, plans=plans, metrics=metrics)
