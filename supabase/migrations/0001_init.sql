@@ -1,0 +1,12 @@
+create extension if not exists pgcrypto;
+create table if not exists public.obligations (id uuid primary key default gen_random_uuid(),user_id uuid,composite_id text not null,raw_code text not null,entity text not null,unit_amount integer not null check(unit_amount>0),policy text not null check(policy in('ACC','FIX')),mt integer not null check(mt>0),start_month date not null,native_end_month date not null,active boolean not null default true,created_at timestamptz not null default now(),updated_at timestamptz not null default now(),unique(user_id,composite_id),unique(user_id,raw_code));
+create table if not exists public.ledger_events (id uuid primary key default gen_random_uuid(),user_id uuid,obligation_id uuid references public.obligations(id) on delete set null,event_type text not null check(event_type in('INCOME','PAYMENT','ADJUSTMENT','REVERSAL')),event_date date not null,amount integer not null check(amount>0),note text,reversal_of uuid references public.ledger_events(id),created_at timestamptz not null default now());
+create table if not exists public.optimization_runs (id uuid primary key default gen_random_uuid(),user_id uuid,input_checksum text not null,solver text not null,status text not null,config jsonb not null,metrics jsonb,created_at timestamptz not null default now());
+create table if not exists public.optimization_allocations (id uuid primary key default gen_random_uuid(),run_id uuid not null references public.optimization_runs(id) on delete cascade,obligation_id uuid references public.obligations(id) on delete cascade,composite_id text not null,month date not null,amount integer not null check(amount>=0),regular_units integer not null default 0 check(regular_units>=0),irregular_amount integer not null default 0 check(irregular_amount>=0),fixed_amount integer not null default 0 check(fixed_amount>=0),unique(run_id,composite_id,month));
+create index if not exists ledger_events_user_date_idx on public.ledger_events(user_id,event_date);
+create index if not exists allocations_run_month_idx on public.optimization_allocations(run_id,month);
+alter table public.obligations enable row level security;
+alter table public.ledger_events enable row level security;
+alter table public.optimization_runs enable row level security;
+alter table public.optimization_allocations enable row level security;
+-- No permissive RLS policies in base migration. Add authenticated user policies before hosted personal data.
