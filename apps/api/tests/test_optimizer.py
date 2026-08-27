@@ -44,3 +44,22 @@ def test_irregular_atoms_frontload_to_september():
         plan = next(p for p in result.plans if p.entity == entity)
         irr = [a for a in plan.allocations if a.irregular_amount]
         assert irr and all(a.month == "2026-09" for a in irr)
+
+
+def test_load_profile_is_non_increasing_by_default():
+    obligations, _ = parse_codes(SEED_CODES)
+    result = optimize(obligations, EngineConfig())
+    values = list(result.metrics.monthly_totals.values())
+    assert values == sorted(values, reverse=True)
+
+
+def test_new_valid_code_reoptimizes_without_schema_changes():
+    codes = [*SEED_CODES, "C14-XYZ-U80-ACC-5-5N80A-1026126-MT400"]
+    obligations, issues = parse_codes(codes)
+    assert not issues
+    result = optimize(obligations, EngineConfig())
+    assert result.valid
+    assert result.metrics.global_mt == 15035
+    added = next(p for p in result.plans if p.id == "C14")
+    assert added.planned_total == 400
+    assert all((a.amount - a.irregular_amount) % 80 == 0 for a in added.allocations)
