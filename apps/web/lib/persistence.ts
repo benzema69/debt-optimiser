@@ -89,21 +89,27 @@ export async function saveOptimizationRun(input: {
   codes: string[];
   result: OptimizationResult;
   obligations: ObligationRow[];
+  paidById?: Record<string, number>;
+  optimizationStart?: string;
 }): Promise<string> {
   if (!input.result.valid || !input.result.metrics) throw new Error("Cannot persist an invalid optimization result");
   const client = mustClient();
-  const checksum = await sha256(input.codes.join("\n"));
+  const paidById = input.paidById ?? {};
+  const optimizationStart = input.optimizationStart ?? "2026-09-01";
+  const checksumPayload = JSON.stringify({ codes: input.codes, paidById, optimizationStart });
+  const checksum = await sha256(checksumPayload);
   const { data: run, error: runError } = await client.from("optimization_runs").insert({
     user_id: input.userId,
     input_checksum: checksum,
     solver: input.result.solver,
     status: "VALID",
     config: {
-      optimization_start: "2026-09-01",
+      optimization_start: optimizationStart,
       zero_day: "2027-01-31",
       frontload_b: true,
       frontload_one_off: true,
       descending_load: true,
+      paid_by_id: paidById,
     },
     metrics: input.result.metrics,
   }).select("id").single();
