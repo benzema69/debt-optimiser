@@ -1,4 +1,4 @@
-import type { ParsedObligation } from "./types";
+import type { ParsedObligation, OptimizationResult } from "./types";
 import type { LedgerEventRow, ObligationRow } from "./database.types";
 import { getSupabase } from "./supabase";
 
@@ -7,6 +7,8 @@ function mustClient() {
   if (!client) throw new Error("Supabase is not configured");
   return client;
 }
+
+const EVENT_TYPES = new Set(["INCOME", "PAYMENT", "ADJUSTMENT", "REVERSAL"] as const);
 
 export async function listObligations(): Promise<ObligationRow[]> {
   const client = mustClient();
@@ -45,7 +47,7 @@ export async function listLedgerEvents(): Promise<LedgerEventRow[]> {
   const client = mustClient();
   const { data, error } = await client.from("ledger_events").select("*").order("event_date", { ascending: true }).order("created_at", { ascending: true });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).filter(e => EVENT_TYPES.has(e.event_type as never)).map(e => ({ ...e, event_type: e.event_type as LedgerEventRow["event_type"] }));
 }
 
 export async function addLedgerEvent(input: {
@@ -66,11 +68,61 @@ export async function addLedgerEvent(input: {
     obligation_id: input.obligationId ?? null,
   }).select("*").single();
   if (error) throw error;
-  return data;
+  if (!EVENT_TYPES.has(data.event_type as never)) throw new Error(`Unexpected ledger event type: ${data.event_type}`);
+  return { ...data, event_type: data.event_type as LedgerEventRow["event_type"] };
 }
 
 export async function deleteLedgerEvent(id: string): Promise<void> {
   const client = mustClient();
   const { error } = await client.from("ledger_events").delete().eq("id", id);
   if (error) throw error;
+}
+
+async function sha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash)).map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+export async function saveOptimizationRun(input: {
+  userId: string;
+  codes: string[];
+  result: OptimizationResult;
+  obligations: ObligationRow[];
+}): Promise<string> {
+  if (!input.result.valid || !input.result.metrics) throw new Error("Cannot persist an invalid optimization result");
+  const client = mustClient();
+  const checksum = await sha256(input.codes.join("\n"));
+  const { data: run, error: runError } = await client.from("optimization_runs").insert({
+    user_id: input.userId,
+    input_checksum: checksum,
+    solver: input.result.solver,
+    status: "VALID",
+    config: {
+      optimization_start: "2026-09-01",
+      zero_day: "2027-01-31",
+      frontload_b: true,
+      frontload_one_off: true,
+      descending_load: true,
+    },
+    metrics: input.result.metrics,
+  }).select("id").single();
+  if (runError) throw runError;
+
+  const ids = new Map(input.obligations.map(o => [o.composite_id, o.id]));
+  const allocations = input.result.plans.flatMap(plan => plan.allocations.map(a => ({
+    run_id: run.id,
+    obligation_id: ids.get(plan.id) ?? null,
+    composite_id: plan.id,
+    month: `${a.month}-01`,
+    amount: a.amount,
+    regular_units: a.regular_units,
+    irregular_amount: a.irregular_amount,
+    fixed_amount: a.fixed_amount,
+  })));
+  if (allocations.length) {
+    const { error } = await client.from("optimization_allocations").insert(allocations);
+    if (error) throw error;
+  }
+  return run.id;
 }
