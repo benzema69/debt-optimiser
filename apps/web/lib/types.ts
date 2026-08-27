@@ -20,3 +20,13 @@ export type ObligationPlan = { id:string; entity:string; mt:number; unit:number;
 export type Metrics = { global_mt:number; peak_monthly:number; minimum_monthly:number; final_month:number; average_per_day:number; days_in_window:number; monthly_totals:Record<string,number> };
 export type OptimizationResult = { valid:boolean; solver:string; issues:ValidationIssue[]; plans:ObligationPlan[]; metrics:Metrics|null };
 export type SimulationResult = { valid:boolean; issues?:ValidationIssue[]; before?:OptimizationResult; after?:OptimizationResult; candidate?:ParsedObligation };
+export type ReconciliationItem = { id:string; paid:number; remaining:number; regular_units_paid?:number; irregular_paid?:number; fixed_prefix_payments_paid?:number };
+export type ReoptimizationResult = {
+  valid:boolean;
+  issues:ValidationIssue[];
+  reconciliation:ReconciliationItem[];
+  paid_to_date?:number;
+  original_mt?:number;
+  remaining_mt?:number;
+  result:OptimizationResult|null;
+};
