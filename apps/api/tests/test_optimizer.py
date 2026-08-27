@@ -54,7 +54,7 @@ def test_load_profile_is_non_increasing_by_default():
 
 
 def test_new_valid_code_reoptimizes_without_schema_changes():
-    codes = [*SEED_CODES, "C14-XYZ-U80-ACC-5-5N80A-1026126-MT400"]
+    codes = [*SEED_CODES, "C14-XYZ-U80-ACC-5-5N80A-1026127-MT400"]
     obligations, issues = parse_codes(codes)
     assert not issues
     result = optimize(obligations, EngineConfig())
