@@ -131,6 +131,11 @@ class OptimizeRequest(CodesRequest):
     config: EngineConfig = Field(default_factory=EngineConfig)
 
 
+class ReoptimizeRequest(CodesRequest):
+    paid_by_id: dict[str, int] = Field(default_factory=dict)
+    config: EngineConfig = Field(default_factory=EngineConfig)
+
+
 class ParseRequest(BaseModel):
     code: str
 
