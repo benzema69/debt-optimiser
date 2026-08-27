@@ -1,7 +1,22 @@
 export type Policy = "ACC" | "FIX";
 export type ValidationIssue = { code:string; severity:"ERROR"|"WARNING"; error:string; detail:string };
+export type PaymentBlock = { count:number; amount:number; kind:"A"|"B" };
+export type ParsedObligation = {
+  raw_code:string;
+  id:string;
+  rank:number;
+  entity:string;
+  unit:number;
+  policy:Policy;
+  payment_count:number;
+  blocks:PaymentBlock[];
+  start_month:string;
+  native_end_month:string;
+  mt:number;
+};
+export type ParseResult = { valid:boolean; obligation:ParsedObligation|null; issues:ValidationIssue[] };
 export type Allocation = { id:string; entity:string; month:string; amount:number; regular_units:number; irregular_amount:number; fixed_amount:number };
 export type ObligationPlan = { id:string; entity:string; mt:number; unit:number; policy:Policy; allocations:Allocation[] };
 export type Metrics = { global_mt:number; peak_monthly:number; minimum_monthly:number; final_month:number; average_per_day:number; days_in_window:number; monthly_totals:Record<string,number> };
 export type OptimizationResult = { valid:boolean; solver:string; issues:ValidationIssue[]; plans:ObligationPlan[]; metrics:Metrics|null };
-export type SimulationResult = { valid:boolean; issues?:ValidationIssue[]; before?:OptimizationResult; after?:OptimizationResult };
+export type SimulationResult = { valid:boolean; issues?:ValidationIssue[]; before?:OptimizationResult; after?:OptimizationResult; candidate?:ParsedObligation };
