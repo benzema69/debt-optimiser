@@ -1,0 +1,3 @@
+import type { Metrics } from "../lib/types";
+const labels:Record<string,string>={"2026-09":"Sep","2026-10":"Oct","2026-11":"Nov","2026-12":"Dec","2027-01":"Jan"};
+export function LoadProfile({metrics}:{metrics:Metrics}){const peak=Math.max(...Object.values(metrics.monthly_totals));return <section className="panel"><div className="panel-head"><div><span className="eyebrow">GENERATION PRESSURE</span><h2>Load profile</h2></div></div><div className="bars">{Object.entries(metrics.monthly_totals).map(([month,amount])=><div className="bar-row" key={month}><span>{labels[month]??month}</span><div className="bar-track"><div className="bar-fill" style={{width:`${amount/peak*100}%`}}/></div><b>CHF {amount.toLocaleString("fr-CH")}</b></div>)}</div></section>}
