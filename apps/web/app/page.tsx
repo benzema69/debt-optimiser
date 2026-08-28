@@ -8,6 +8,7 @@ import {CodeDatabase} from "../components/CodeDatabase";
 import {LoadProfile} from "../components/LoadProfile";
 import {MetricCard} from "../components/MetricCard";
 import {MonthlyMatrix} from "../components/MonthlyMatrix";
+import {PacePanel} from "../components/PacePanel";
 import {ReconciliationPanel} from "../components/ReconciliationPanel";
 import {Sandbox} from "../components/Sandbox";
 import {StatusBadge} from "../components/StatusBadge";
@@ -166,10 +167,11 @@ export default function Home(){
     {hasPayments&&reopt?.valid?<ReconciliationPanel state={reopt} planningStart={planningStart} onSave={session&&displayResult?saveSnapshot:undefined} saving={savingSnapshot} savedRun={savedRun}/>:null}
     {hasPayments&&reopt?.valid&&reopt.remaining_mt===0?<section className="panel all-clear"><span className="eyebrow">TERMINAL STATE</span><h2>All encoded liabilities extinguished.</h2><strong>CHF 0.00 REMAINING</strong><p>No optimizer allocation is required after the final reconciled payment.</p></section>:null}
 
+    {metrics?<PacePanel metrics={metrics} events={ledgerEvents} planningStart={planningStart}/>:null}
     {displayResult?.valid?<MonthlyMatrix result={displayResult}/>:null}
     {metrics?<LoadProfile metrics={metrics}/>:null}
     <div className="two-col"><CodeDatabase codes={codes} onRemove={remove}/><Sandbox codes={codes} onApply={applyCode}/></div>
     {originalMt?<ActualsPanel planned={originalMt} userId={session?.user.id} obligations={rows} onEventsChange={handleEventsChange}/>:null}
-    <footer><span>Source → Parse → Validate → Reconcile → Optimize → Persist → Render</span><span>{displayResult?.solver??(remainingMt===0?"terminal-zero":"no solver")}</span></footer>
+    <footer><span>Source → Parse → Validate → Reconcile → Optimize → Pace → Persist → Render</span><span>{displayResult?.solver??(remainingMt===0?"terminal-zero":"no solver")}</span></footer>
   </main>;
 }
