@@ -19,7 +19,7 @@ export function ActualsPanel({planned,userId,obligations,onEventsChange}:{planne
   const[busy,setBusy]=useState(false);
   const[error,setError]=useState<string|null>(null);
 
-  useEffect(()=>{if(!userId){setEvents([]);onEventsChange?.([]);return;}let live=true;(async()=>{try{const data=await listLedgerEvents();if(live){setEvents(data);onEventsChange?.(data)}}catch(e){if(live)setError(String(e))}})();return()=>{live=false}},[userId,onEventsChange]);
+  useEffect(()=>{if(!userId){setEvents([]);onEventsChange?.([]);return;}let live=true;(async()=>{try{const data=await listLedgerEvents();if(live){setEvents(data);onEventsChange?.(effectiveLedgerEvents(data))}}catch(e){if(live)setError(String(e))}})();return()=>{live=false}},[userId,onEventsChange]);
 
   const effective=useMemo(()=>effectiveLedgerEvents(events),[events]);
   const reversed=useMemo(()=>reversedEventIds(events),[events]);
@@ -46,7 +46,7 @@ export function ActualsPanel({planned,userId,obligations,onEventsChange}:{planne
         setAmount("");
       }
       const next=[...events,created].sort((a,b)=>a.event_date.localeCompare(b.event_date)||a.created_at.localeCompare(b.created_at));
-      setEvents(next);onEventsChange?.(next);setNote("");
+      setEvents(next);onEventsChange?.(effectiveLedgerEvents(next));setNote("");
     }catch(e){setError(String(e))}finally{setBusy(false)}
   }
 
@@ -54,7 +54,7 @@ export function ActualsPanel({planned,userId,obligations,onEventsChange}:{planne
     if(!userId)return;
     if(reversed.has(id)){setError("Delete the reversal event first if you want to remove its original event.");return;}
     setBusy(true);setError(null);
-    try{await deleteLedgerEvent(id);const next=events.filter(e=>e.id!==id);setEvents(next);onEventsChange?.(next)}catch(e){setError(String(e))}finally{setBusy(false)}
+    try{await deleteLedgerEvent(id);const next=events.filter(e=>e.id!==id);setEvents(next);onEventsChange?.(effectiveLedgerEvents(next))}catch(e){setError(String(e))}finally{setBusy(false)}
   }
 
   return <section className="panel"><div className="panel-head"><div><span className="eyebrow">ACTUALS</span><h2>Generation & payment ledger</h2></div><span className="count">{userId?"PERSISTED":"LOCAL LOCKED"}</span></div>
