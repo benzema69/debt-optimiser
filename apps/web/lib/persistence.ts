@@ -57,6 +57,7 @@ export async function addLedgerEvent(input: {
   amount: number;
   note?: string;
   obligationId?: string | null;
+  reversalOf?: string | null;
 }): Promise<LedgerEventRow> {
   const client = mustClient();
   const { data, error } = await client.from("ledger_events").insert({
@@ -66,6 +67,7 @@ export async function addLedgerEvent(input: {
     amount: input.amount,
     note: input.note || null,
     obligation_id: input.obligationId ?? null,
+    reversal_of: input.reversalOf ?? null,
   }).select("*").single();
   if (error) throw error;
   if (!EVENT_TYPES.has(data.event_type as never)) throw new Error(`Unexpected ledger event type: ${data.event_type}`);
