@@ -67,10 +67,23 @@ This file is the chronological build journal for Debt Optimiser. It is intention
 - Added cloud/local mode indicators and responsive cockpit styles.
 - CI caught an initial Supabase generic typing error in the web build; database types were replaced with Supabase-compatible generated structure before continuing.
 
+## 2026-08-28, Phase 9, live reconciliation and replanning
+- Added `/v1/reoptimize` and a reconciliation domain layer so real payment events feed back into the mathematical model rather than merely changing a progress bar.
+- For `ACC` obligations, actual paid amounts must decompose into declared B atoms plus an integer number of U units; non-representable payments are rejected.
+- B consumption is maximized first when several decompositions exist, matching the configured B-frontload policy.
+- For `FIX` obligations, paid-to-date must match an exact prefix of the native schedule; partial fixed installments are rejected instead of silently deforming the contract.
+- Fully paid obligations disappear from the remaining optimization model while their immutable source codes remain intact.
+- The live planning window advances to the current/latest-event month while preserving the absolute 2027-01-31 zero day.
+- Added persisted optimization snapshots containing source-code checksum, paid context, solver identity, metrics and per-obligation allocations.
+- Added live cockpit cards for original MT, paid, remaining, required/day, required/week, peak and January load.
+- Added per-obligation reconciliation cards, progress visualization, terminal-zero state and snapshot control.
+- Expanded API tests from 12 to **20 passing tests**, including ACC integer reconciliation, B-first decomposition, LML U=130 behavior, FIX-prefix validation, invalid fractional payment rejection and fully-paid object removal.
+- GitHub CI on commit `f84d27a9a7d3a77932d7837c3479dadfe211707b`: **API success + Web production build success**.
+
 ## Remaining production work
-- wait for green CI on the authenticated persistence build;
-- deploy an API runtime containing OR-Tools CP-SAT;
-- deploy the Next.js frontend and set API/Supabase environment variables;
+- add Vercel deployment metadata for the FastAPI/OR-Tools service and Next.js frontend;
+- create/link the two Vercel projects from the GitHub monorepo and set API/Supabase environment variables;
+- verify OR-Tools package size/runtime viability on the selected Vercel Python runtime;
 - verify Supabase Auth redirect/site configuration against the deployed frontend;
-- run end-to-end smoke tests for sign-in, seed persistence, add/remove code, optimizer, sandbox and ledger events;
+- run end-to-end smoke tests for sign-in, canonical seed persistence, add/remove code, optimizer, sandbox, ledger, actual-payment reoptimization and snapshot persistence;
 - move the GitHub repository to private before treating the hosted instance as the canonical location for personal financial source data.
