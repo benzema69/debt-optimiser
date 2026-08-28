@@ -1,4 +1,5 @@
 import type {LedgerEventRow} from "../lib/database.types";
+import {generatedTotal} from "../lib/ledger";
 import type {Metrics} from "../lib/types";
 
 const ZERO_DAY="2027-01-31";
@@ -27,7 +28,7 @@ export function PacePanel({metrics,events,planningStart}:{metrics:Metrics;events
   const beforeWindow=wallToday<planningStart;
   const today=clampDate(wallToday,planningStart,ZERO_DAY);
   const target=beforeWindow?0:targetThrough(metrics,planningStart,today);
-  const generated=events.filter(e=>(e.event_type==="INCOME"||e.event_type==="ADJUSTMENT")&&e.event_date>=planningStart&&e.event_date<=(beforeWindow?ZERO_DAY:today)).reduce((s,e)=>s+e.amount,0);
+  const generated=generatedTotal(events,planningStart,beforeWindow?ZERO_DAY:today);
   const delta=generated-target;
   const daysElapsed=beforeWindow?0:Math.max(0,inclusiveDays(planningStart,today));
   const daysTotal=inclusiveDays(planningStart,ZERO_DAY);
